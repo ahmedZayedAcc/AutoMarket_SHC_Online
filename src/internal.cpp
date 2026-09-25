@@ -714,7 +714,7 @@ bool GameInterface::HasMarket(
     if (
         playerId < 0
         ||
-        playerId > 7
+        playerId > 8
     )
     {
         return false;
