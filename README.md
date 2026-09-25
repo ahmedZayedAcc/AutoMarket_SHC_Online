@@ -2,7 +2,7 @@ AutoMarket_SHC_online
 
 Developer: Ahmed Zayed
 
-AutoMarket for Stronghold Crusader HD 1.3, designed for automatic Buy/Sell operations in both offline and online games.
+AutoMarket for Stronghold Crusader HD 1.3, designed for automatic Buy/Sell operations in offline and online games.
 
 ---
 
@@ -28,7 +28,7 @@ Dynamic Player ID
 
 The current Player ID is read directly from the game.
 
-The AutoMarket does not require manually selecting the player.
+No manual player selection is required.
 
 Dynamic Inventory Detection
 
@@ -38,23 +38,19 @@ Automatic Buy & Sell
 
 Automatically buys or sells configured items according to the selected thresholds.
 
-Example:
-
-Current amount > Sell threshold
+Amount > Sell Threshold
 → Sell
 
-Current amount < Buy threshold
+Amount < Buy Threshold
 → Buy
 
 Resource Trading
 
 Supports automatic trading of the configured resources.
 
-Resource trades use the game's normal resource trading quantities.
-
 Weapon Trading
 
-Supports automatic trading for:
+Supports automatic trading of:
 
 - Bows
 - Crossbows
@@ -65,46 +61,121 @@ Supports automatic trading for:
 - Spears
 - Swords
 
-Weapon trading uses the configured weapon quantity handling.
-
 Configurable Trade Frequency
 
 The time between automatic trading checks can be configured.
 
-This prevents the AutoMarket from attempting to trade continuously on every frame.
+---
+
+Controls
+
+Numpad 1 — Toggle Menu
+
+Press:
+
+Numpad 1
+
+to open or close the AutoMarket menu.
+
+Numpad 2 — Toggle Trading
+
+Press:
+
+Numpad 2
+
+to toggle automatic trading:
+
+Numpad 2
+    ↓
+Pause Trading
+    ↕
+Resume Trading
+
+The game continues running normally while AutoMarket trading is paused.
+
+Full Mouse Control
+
+The menu is fully controllable with the mouse.
+
+The mouse can be used to:
+
+- Navigate the menu
+- Select items
+- Change values
+- Configure Buy thresholds
+- Configure Sell thresholds
+- Control the AutoMarket settings
+
+No keyboard-only menu navigation is required.
+
+Save Settings
+
+The menu includes a Save control for saving the current settings to:
+
+automarket.ini
+
+Saved settings can be loaded again when the DLL starts.
+
+---
+
+Configuration
+
+The project uses:
+
+automarket.ini
+automarketsave.ini
+
+The configuration system supports settings such as:
+
+- Buy thresholds
+- Sell thresholds
+- Trade frequency
+- Weapon settings
+- Menu settings
+- Hotkeys
+
+---
 
 Human Market Trace
 
-Added tracing for the game's native market system.
+The project includes tracing for the game's native market system.
 
 The trace can monitor:
 
 - Native trade function calls
 - Buy / Sell operations
-- Player slot
+- Player ID
 - Item ID
 - Network market commands
 - Relevant game memory values
 
-This is mainly useful for debugging and analyzing multiplayer market behavior.
+This is useful for debugging and testing multiplayer market behavior.
+
+---
 
 Network Market Trace
 
 The project hooks the game's network send function and records market-related commands.
 
-This allows the AutoMarket to monitor how market operations are sent through the game's multiplayer system.
+This allows market operations to be monitored through the game's multiplayer network layer.
+
+---
 
 Virtual Inventory Tracking
 
-The project maintains virtual inventory changes after an automatic trade.
+The AutoMarket maintains virtual inventory changes after an automatic trade.
 
-This helps account for the delay between sending a trade and seeing the updated quantity in the game's actual inventory.
+This helps handle the delay between executing a trade and receiving the corresponding inventory update from the game.
+
+---
 
 Dynamic Market Selection
 
-The market item is written to the current player's market-selection area before executing the Buy/Sell action.
+Before executing a Buy/Sell operation, the project writes the selected item to the market-selection area belonging to the current player.
 
-This allows market operations to follow the currently detected player.
+The market operation is then executed using the game's internal market action.
+
+---
 
 Signature-Based Address Detection
 
@@ -113,9 +184,9 @@ Important game addresses are resolved using signatures, including:
 - Trade function
 - Market ID
 - Product / Inventory base
-- Other required internal addresses
+- Required internal addresses
 
-This reduces dependence on manually entering every address.
+---
 
 DirectDraw Proxy
 
@@ -130,45 +201,37 @@ DirectDrawCreateEx
 DirectDrawEnumerateA
 DirectDrawEnumerateW
 
+---
+
 MinHook
 
 Uses MinHook for API and internal game-function hooks.
 
+---
+
 In-Game Menu
 
-The project includes an in-game menu with mouse interaction for configuring the AutoMarket.
+The AutoMarket menu is rendered inside the game through the DirectDraw rendering path.
 
-Configuration Files
+It provides mouse-based configuration of the trading system.
 
-The current configuration system uses:
-
-automarket.ini
-automarketsave.ini
-
-Configuration includes:
-
-- Buy thresholds
-- Sell thresholds
-- Trade frequency
-- Weapon settings
-- Menu settings
-- Hotkeys
-
-Pause System
-
-Automatic trading can be paused without stopping the game.
+---
 
 Session Reset
 
-AutoMarket state is reset when leaving the active game state so that previous session settings do not incorrectly carry into another game.
+AutoMarket state is reset when leaving the active game state.
+
+This prevents previous session state from being incorrectly carried into another game.
+
+---
 
 Debug Logging
 
 The project includes logging for debugging and testing.
 
-The log can contain information such as:
+The log can contain:
 
-- Initialization
+- Initialization information
 - Player ID changes
 - Market addresses
 - Trade operations
@@ -186,7 +249,7 @@ Player ID:
 
 1–8
 
-Storage / Inventory index:
+Storage / Inventory Index:
 
 0–7
 
@@ -210,38 +273,19 @@ int inventoryIndex = playerId - 1;
 
 Trading Flow
 
-The automatic trading process is:
-
 MyBlt()
    ↓
 ExecuteTrade()
    ↓
-Check game state
+Check Game State
    ↓
-Check trade frequency
+Check Trade Frequency
    ↓
-Read current inventory
+Read Inventory
    ↓
-Compare thresholds
+Compare Thresholds
    ↓
 Buy / Sell
-
----
-
-Configuration Example
-
-A typical item can have:
-
-Sell Threshold = 500
-Buy Threshold  = 100
-
-The AutoMarket will:
-
-Amount > 500
-→ Sell
-
-Amount < 100
-→ Buy
 
 ---
 
@@ -252,7 +296,7 @@ Requirements
 - 32-bit "ddraw.dll"
 - Windows / compatible Wine environment
 
-For Building
+Building
 
 - CMake
 - MinGW "i686-w64-mingw32"
@@ -261,16 +305,16 @@ For Building
 
 ---
 
-Build
+Build Output
 
-The project builds a 32-bit:
+The project builds:
 
 ddraw.dll
 
-The DLL is used as the DirectDraw proxy for Stronghold Crusader.
+as a 32-bit DirectDraw proxy for Stronghold Crusader HD 1.3.
 
 ---
 
 Project Status
 
-AutoMarket_SHC_online is under development and testing for Stronghold Crusader HD 1.3, with a focus on automatic market trading and online multiplayer player/inventory handling.
+AutoMarket_SHC_online is under development and testing for Stronghold Crusader HD 1.3, with a focus on automatic market trading, online multiplayer support, dynamic player/inventory handling, and mouse-controlled configuration.
