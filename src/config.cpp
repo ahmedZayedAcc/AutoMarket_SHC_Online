@@ -3,32 +3,18 @@
 #include <sstream>
 #include <algorithm>
 
-static std::vector<std::wstring> SplitString(const std::wstring& s, wchar_t delimiter) {
-    std::vector<std::wstring> tokens;
-    std::wstring token;
-    std::wistringstream tokenStream(s);
-    while (std::getline(tokenStream, token, delimiter)) {
-        size_t first = token.find_first_not_of(L" \t");
-        if (first == std::wstring::npos) continue;
-        size_t last = token.find_last_not_of(L" \t");
-        tokens.push_back(token.substr(first, (last - first + 1)));
-    }
-    return tokens;
-}
-
 ConfigManager& ConfigManager::Instance() {
     static ConfigManager instance;
     return instance;
 }
 
-ConfigManager::ConfigManager() : m_defaultSale(500), m_defaultBuy(0), m_weaponCount(0), m_tradeFrequency(100), m_activePresetIdx(0) {
-    // Default: ALT+M
-    m_toggleMenu    = { 0x4D, false, false, true  };
-    m_saveConfig    = { 0x53, true,  true,  false };
-    m_loadSnapshot  = { 0x4C, true,  true,  false };
-    m_resetAll      = { 0x52, true,  false, false };
-    m_reloadConfig  = { 0x4C, true,  false, false };
-    m_help          = { VK_F1, false, false, false };
+ConfigManager::ConfigManager() : m_defaultSale(500), m_defaultBuy(0), m_weaponCount(0), m_tradeFrequency(50) {
+    m_toggleMenu    = { 0x61, false, false }; // Numpad 1
+    m_togglePause   = { 0x62, false, false }; // Numpad 2
+    m_saveConfig    = { 0x53, true,  true  };
+    m_loadSnapshot  = { 0x4C, true,  true  };
+    m_resetAll      = { 0x52, true,  false };
+    m_reloadConfig  = { 0x4C, true,  false };
     InitDefaultItems();
 }
 
@@ -82,148 +68,36 @@ void ConfigManager::WriteColor(const wchar_t* section, const wchar_t* key, COLOR
     WritePrivateProfileStringW(section, key, s.c_str(), path.c_str());
 }
 
-void ConfigManager::LoadPresetThresholds(const std::wstring& path, const std::wstring& presetName) {
-    std::wstring weaponSection = L"Preset_" + presetName + L"_Weapons";
-    std::wstring resSection = L"Preset_" + presetName + L"_Resources";
-
+void ConfigManager::LoadItemThresholds(const std::wstring& path) {
     const wchar_t* weaponKeys[] = {L"Bows", L"Crossbows", L"LeatherArmor", L"Maces", L"MetalArmor", L"Pikes", L"Spears", L"Swords"};
     for (int i = 0; i < m_weaponCount; i++) {
-        std::wstring val = ReadString(weaponSection.c_str(), weaponKeys[i], L"", path);
+        std::wstring val = ReadString(L"Weapons", weaponKeys[i], L"", path);
         if (!val.empty()) {
             swscanf(val.c_str(), L"%d,%d", &m_items[i].saleThreshold, &m_items[i].buyThreshold);
-        } else {
-            m_items[i].saleThreshold = m_defaultSale;
-            m_items[i].buyThreshold = m_defaultBuy;
         }
     }
     const wchar_t* resKeys[] = {L"Ale", L"Bread", L"Cheese", L"Flour", L"Fruit", L"Hops", L"Iron", L"Meat", L"Pitch", L"Stone", L"Wheat", L"Wood"};
     int resCount = (int)m_items.size() - m_weaponCount;
     for (int i = 0; i < resCount; i++) {
-        std::wstring val = ReadString(resSection.c_str(), resKeys[i], L"", path);
+        std::wstring val = ReadString(L"Resources", resKeys[i], L"", path);
         if (!val.empty()) {
             swscanf(val.c_str(), L"%d,%d", &m_items[m_weaponCount+i].saleThreshold, &m_items[m_weaponCount+i].buyThreshold);
-        } else {
-            m_items[m_weaponCount+i].saleThreshold = m_defaultSale;
-            m_items[m_weaponCount+i].buyThreshold = m_defaultBuy;
         }
     }
 }
 
-void ConfigManager::SavePresetThresholds(const std::wstring& path, const std::wstring& presetName) {
-    std::wstring weaponSection = L"Preset_" + presetName + L"_Weapons";
-    std::wstring resSection = L"Preset_" + presetName + L"_Resources";
-
+void ConfigManager::SaveItemThresholds(const std::wstring& path) {
     const wchar_t* weaponKeys[] = {L"Bows", L"Crossbows", L"LeatherArmor", L"Maces", L"MetalArmor", L"Pikes", L"Spears", L"Swords"};
     for (int i = 0; i < m_weaponCount; i++) {
         std::wstring val = std::to_wstring(m_items[i].saleThreshold) + L"," + std::to_wstring(m_items[i].buyThreshold);
-        WritePrivateProfileStringW(weaponSection.c_str(), weaponKeys[i], val.c_str(), path.c_str());
+        WritePrivateProfileStringW(L"Weapons", weaponKeys[i], val.c_str(), path.c_str());
     }
     const wchar_t* resKeys[] = {L"Ale", L"Bread", L"Cheese", L"Flour", L"Fruit", L"Hops", L"Iron", L"Meat", L"Pitch", L"Stone", L"Wheat", L"Wood"};
     int resCount = (int)m_items.size() - m_weaponCount;
     for (int i = 0; i < resCount; i++) {
         std::wstring val = std::to_wstring(m_items[m_weaponCount+i].saleThreshold) + L"," + std::to_wstring(m_items[m_weaponCount+i].buyThreshold);
-        WritePrivateProfileStringW(resSection.c_str(), resKeys[i], val.c_str(), path.c_str());
+        WritePrivateProfileStringW(L"Resources", resKeys[i], val.c_str(), path.c_str());
     }
-}
-
-void ConfigManager::LoadPresets() {
-    m_presets.clear();
-    std::wstring listStr = ReadString(L"Presets", L"List", L"Default", m_savePath);
-    m_presets = SplitString(listStr, L',');
-    if (m_presets.empty()) {
-        m_presets.push_back(L"Default");
-    }
-    std::wstring activeStr = ReadString(L"Presets", L"Active", L"Default", m_savePath);
-    m_activePresetIdx = 0;
-    for (size_t i = 0; i < m_presets.size(); i++) {
-        if (m_presets[i] == activeStr) {
-            m_activePresetIdx = (int)i;
-            break;
-        }
-    }
-    LoadPresetThresholds(m_savePath, m_presets[m_activePresetIdx]);
-}
-
-void ConfigManager::SavePresetList() {
-    std::wstring listStr = L"";
-    for (size_t i = 0; i < m_presets.size(); i++) {
-        if (i > 0) listStr += L",";
-        listStr += m_presets[i];
-    }
-    WritePrivateProfileStringW(L"Presets", L"List", listStr.c_str(), m_savePath.c_str());
-    if (!m_presets.empty()) {
-        WritePrivateProfileStringW(L"Presets", L"Active", m_presets[m_activePresetIdx].c_str(), m_savePath.c_str());
-    }
-}
-
-std::wstring ConfigManager::GetActivePresetName() const {
-    if (m_presets.empty() || m_activePresetIdx < 0 || m_activePresetIdx >= (int)m_presets.size()) return L"Default";
-    return m_presets[m_activePresetIdx];
-}
-
-void ConfigManager::SetActivePreset(int idx) {
-    if (idx < 0 || idx >= (int)m_presets.size()) return;
-    m_activePresetIdx = idx;
-    LoadPresetThresholds(m_savePath, m_presets[m_activePresetIdx]);
-    WritePrivateProfileStringW(L"Presets", L"Active", m_presets[m_activePresetIdx].c_str(), m_savePath.c_str());
-}
-
-void ConfigManager::LoadPresetByName(const std::wstring& name) {
-    for (size_t i = 0; i < m_presets.size(); i++) {
-        if (m_presets[i] == name) {
-            SetActivePreset((int)i);
-            return;
-        }
-    }
-}
-
-void ConfigManager::SaveActivePreset() {
-    if (m_presets.empty()) return;
-    std::wstring activeName = m_presets[m_activePresetIdx];
-    SavePresetThresholds(m_savePath, activeName);
-    SavePresetList();
-}
-
-void ConfigManager::AddPreset(const std::wstring& newName) {
-    if (newName.empty()) return;
-    for (size_t i = 0; i < m_presets.size(); i++) {
-        if (m_presets[i] == newName) {
-            m_activePresetIdx = (int)i;
-            SavePresetThresholds(m_savePath, newName);
-            SavePresetList();
-            return;
-        }
-    }
-    m_presets.push_back(newName);
-    m_activePresetIdx = (int)m_presets.size() - 1;
-    SavePresetThresholds(m_savePath, newName);
-    SavePresetList();
-}
-
-void ConfigManager::DeleteActivePreset() {
-    if (m_presets.size() <= 1) return; // Selalu sisakan 1
-    std::wstring toDelete = m_presets[m_activePresetIdx];
-    
-    // Hapus section dari file INI
-    std::wstring wSec = L"Preset_" + toDelete + L"_Weapons";
-    std::wstring rSec = L"Preset_" + toDelete + L"_Resources";
-    WritePrivateProfileStringW(wSec.c_str(), NULL, NULL, m_savePath.c_str());
-    WritePrivateProfileStringW(rSec.c_str(), NULL, NULL, m_savePath.c_str());
-    
-    m_presets.erase(m_presets.begin() + m_activePresetIdx);
-    if (m_activePresetIdx >= (int)m_presets.size()) {
-        m_activePresetIdx = (int)m_presets.size() - 1;
-    }
-    LoadPresetThresholds(m_savePath, m_presets[m_activePresetIdx]);
-    SavePresetList();
-}
-
-static std::string WtoA(const std::wstring& ws) {
-    if (ws.empty()) return "";
-    int len = WideCharToMultiByte(CP_UTF8, 0, ws.c_str(), (int)ws.size(), nullptr, 0, nullptr, nullptr);
-    std::string s(len, 0);
-    WideCharToMultiByte(CP_UTF8, 0, ws.c_str(), (int)ws.size(), &s[0], len, nullptr, nullptr);
-    return s;
 }
 
 void ConfigManager::Load(const std::wstring& iniPath) {
@@ -231,41 +105,37 @@ void ConfigManager::Load(const std::wstring& iniPath) {
     wchar_t dir[MAX_PATH];
     lstrcpynW(dir, iniPath.c_str(), MAX_PATH);
     if (wchar_t* lastSlash = wcsrchr(dir, L'\\')) *(lastSlash + 1) = L'\0';
-    m_savePath = std::wstring(dir) + L"ddrawsave.ini";
+    m_savePath = std::wstring(dir) + L"automarketsave.ini";
 
     // Hotkeys
-    m_toggleMenu.vkCode = ReadInt(L"Hotkeys", L"ToggleMenu", 0x4D, m_iniPath);
+    m_toggleMenu.vkCode = ReadInt(L"Hotkeys", L"ToggleMenu", 0x61, m_iniPath); 
     m_toggleMenu.ctrl = ReadInt(L"Hotkeys", L"ToggleMenu_Ctrl", 0, m_iniPath);
     m_toggleMenu.shift = ReadInt(L"Hotkeys", L"ToggleMenu_Shift", 0, m_iniPath);
-    m_toggleMenu.alt = ReadInt(L"Hotkeys", L"ToggleMenu_Alt", 1, m_iniPath);
+
+    m_togglePause.vkCode = ReadInt(L"Hotkeys", L"TogglePause", 0x62, m_iniPath); 
+    m_togglePause.ctrl = ReadInt(L"Hotkeys", L"TogglePause_Ctrl", 0, m_iniPath);
+    m_togglePause.shift = ReadInt(L"Hotkeys", L"TogglePause_Shift", 0, m_iniPath);
 
     m_saveConfig.vkCode = ReadInt(L"Hotkeys", L"SaveConfig", 0x53, m_iniPath);
     m_saveConfig.ctrl = ReadInt(L"Hotkeys", L"SaveConfig_Ctrl", 1, m_iniPath);
     m_saveConfig.shift = ReadInt(L"Hotkeys", L"SaveConfig_Shift", 1, m_iniPath);
-    m_saveConfig.alt = ReadInt(L"Hotkeys", L"SaveConfig_Alt", 0, m_iniPath);
 
     m_loadSnapshot.vkCode = ReadInt(L"Hotkeys", L"LoadSnapshot", 0x4C, m_iniPath);
     m_loadSnapshot.ctrl = ReadInt(L"Hotkeys", L"LoadSnapshot_Ctrl", 1, m_iniPath);
     m_loadSnapshot.shift = ReadInt(L"Hotkeys", L"LoadSnapshot_Shift", 1, m_iniPath);
-    m_loadSnapshot.alt = ReadInt(L"Hotkeys", L"LoadSnapshot_Alt", 0, m_iniPath);
 
     m_resetAll.vkCode = ReadInt(L"Hotkeys", L"ResetAll", 0x52, m_iniPath);
     m_resetAll.ctrl = ReadInt(L"Hotkeys", L"ResetAll_Ctrl", 1, m_iniPath);
     m_resetAll.shift = ReadInt(L"Hotkeys", L"ResetAll_Shift", 0, m_iniPath);
-    m_resetAll.alt = ReadInt(L"Hotkeys", L"ResetAll_Alt", 0, m_iniPath);
 
     m_reloadConfig.vkCode = ReadInt(L"Hotkeys", L"ReloadConfig", 0x4C, m_iniPath);
     m_reloadConfig.ctrl = ReadInt(L"Hotkeys", L"ReloadConfig_Ctrl", 1, m_iniPath);
     m_reloadConfig.shift = ReadInt(L"Hotkeys", L"ReloadConfig_Shift", 0, m_iniPath);
-    m_reloadConfig.alt = ReadInt(L"Hotkeys", L"ReloadConfig_Alt", 0, m_iniPath);
 
-    m_help.vkCode = ReadInt(L"Hotkeys", L"Help", VK_F1, m_iniPath);
-    m_help.ctrl = ReadInt(L"Hotkeys", L"Help_Ctrl", 0, m_iniPath);
-    m_help.shift = ReadInt(L"Hotkeys", L"Help_Shift", 0, m_iniPath);
-    m_help.alt = ReadInt(L"Hotkeys", L"Help_Alt", 0, m_iniPath);
+    // Advanced
+    m_tradeFrequency = ReadInt(L"Advanced", L"TradeFrequencyMs", 50, m_iniPath);
 
-    m_tradeFrequency = ReadInt(L"Advanced", L"TradeFrequencyMs", 100, m_iniPath);
-
+    // UI
     m_ui.menuWidth = ReadInt(L"UI", L"MenuWidth", 400, m_iniPath);
     m_ui.rowHeight = ReadInt(L"UI", L"RowHeight", 22, m_iniPath);
     m_ui.offsetX = ReadInt(L"UI", L"OffsetX", 0, m_iniPath);
@@ -274,144 +144,71 @@ void ConfigManager::Load(const std::wstring& iniPath) {
     m_ui.fontSize = ReadInt(L"UI", L"FontSize", 16, m_iniPath);
     m_ui.titleSize = ReadInt(L"UI", L"TitleSize", 20, m_iniPath);
 
-    m_ui.bgColor     = ReadColor(L"UI", L"BgColor", RGB(58, 40, 22), m_iniPath);
-    m_ui.headerColor = ReadColor(L"UI", L"HeaderColor", RGB(92, 62, 30), m_iniPath);
-    m_ui.rowColor    = ReadColor(L"UI", L"RowColor", RGB(72, 50, 28), m_iniPath);
-    m_ui.selColor    = ReadColor(L"UI", L"SelColor", RGB(140, 95, 40), m_iniPath);
-    m_ui.editColor   = ReadColor(L"UI", L"EditColor", RGB(170, 110, 35), m_iniPath);
-    m_ui.catColor    = ReadColor(L"UI", L"CatColor", RGB(105, 72, 35), m_iniPath);
+    // --- درجات الألوان المأخوذة من صورة الواجهة مباشرة ---
+    m_ui.bgColor     = ReadColor(L"UI", L"BgColor", RGB(246, 224, 175), m_iniPath);       // بيج رملي (خلفية)
+    m_ui.headerColor = ReadColor(L"UI", L"HeaderColor", RGB(198, 126, 88), m_iniPath);   // بني نحاسي للرأس والزر السفلي
+    m_ui.rowColor    = ReadColor(L"UI", L"RowColor", RGB(250, 232, 192), m_iniPath);      // بيج فاتح للصفوف
+    m_ui.selColor    = ReadColor(L"UI", L"SelColor", RGB(175, 105, 70), m_iniPath);     // بني غامق عند التحديد
+    m_ui.editColor   = ReadColor(L"UI", L"EditColor", RGB(198, 126, 88), m_iniPath);    // بني للأزرار (+ و -)
+    m_ui.catColor    = ReadColor(L"UI", L"CatColor", RGB(225, 168, 112), m_iniPath);      // ذهبي بني لشريط الفئات (Weapons / Resources)
 
-    m_ui.textColor     = ReadColor(L"UI", L"TextColor", RGB(245, 220, 155), m_iniPath);
-    m_ui.selTextColor  = ReadColor(L"UI", L"HighlightTextColor", RGB(255, 245, 200), m_iniPath);
-    m_ui.editTextColor = ReadColor(L"UI", L"EditTextColor", RGB(255, 255, 120), m_iniPath);
-    m_ui.titleColor    = ReadColor(L"UI", L"TitleColor", RGB(255, 200, 80), m_iniPath);
+    m_ui.textColor     = ReadColor(L"UI", L"TextColor", RGB(35, 25, 15), m_iniPath);        // بني داكن/أسود لأسماء المواد والأرقام
+    m_ui.selTextColor  = ReadColor(L"UI", L"HighlightTextColor", RGB(255, 255, 255), m_iniPath); // أبيض للأزرار والتحديد
+    m_ui.editTextColor = ReadColor(L"UI", L"EditTextColor", RGB(255, 255, 255), m_iniPath);    // أبيض لنصوص أزرار + و -
+    m_ui.titleColor    = ReadColor(L"UI", L"TitleColor", RGB(35, 25, 15), m_iniPath);       // بني داكن للعنوان الرئيسي
 
     m_defaultSale = ReadInt(L"Defaults", L"DefaultSale", 500, m_iniPath);
     m_defaultBuy  = ReadInt(L"Defaults", L"DefaultBuy", 0, m_iniPath);
 
     InitDefaultItems();
-    LoadPresets();
+    LoadItemThresholds(m_iniPath);
+
+    DWORD attr = GetFileAttributesW(m_savePath.c_str());
+    if (attr != INVALID_FILE_ATTRIBUTES && !(attr & FILE_ATTRIBUTE_DIRECTORY)) {
+        LoadItemThresholds(m_savePath);
+    }
 }
 
 void ConfigManager::Save(const std::wstring& iniPath) {
     if (iniPath.empty()) return;
 
-    std::string path = WtoA(iniPath);
-    std::ofstream f(path);
-    if (!f.is_open()) return;
+    WritePrivateProfileStringW(L"Advanced", L"TradeFrequencyMs", std::to_wstring(m_tradeFrequency).c_str(), iniPath.c_str());
 
-    f << "; ============================================\n";
-    f << "; edAutoMarket v2.1 - Configuration File\n";
-    f << "; ============================================\n";
-    f << "; Preset (jual/beli) disimpan di ddrawsave.ini\n";
-    f << "; Tekan F1 di dalam game untuk melihat semua Hotkey.\n";
-    f << "; ============================================\n\n";
+    WritePrivateProfileStringW(L"UI", L"MenuWidth", std::to_wstring(m_ui.menuWidth).c_str(), iniPath.c_str());
+    WritePrivateProfileStringW(L"UI", L"RowHeight", std::to_wstring(m_ui.rowHeight).c_str(), iniPath.c_str());
+    WritePrivateProfileStringW(L"UI", L"OffsetX", std::to_wstring(m_ui.offsetX).c_str(), iniPath.c_str());
+    WritePrivateProfileStringW(L"UI", L"OffsetY", std::to_wstring(m_ui.offsetY).c_str(), iniPath.c_str());
+    WritePrivateProfileStringW(L"UI", L"FontName", m_ui.fontName.c_str(), iniPath.c_str());
+    WritePrivateProfileStringW(L"UI", L"FontSize", std::to_wstring(m_ui.fontSize).c_str(), iniPath.c_str());
+    WritePrivateProfileStringW(L"UI", L"TitleSize", std::to_wstring(m_ui.titleSize).c_str(), iniPath.c_str());
 
-    f << "[Hotkeys]\n";
-    f << "; Referensi VK: 77=M 76=L 82=R 83=S 65-90=A-Z 112-123=F1-F12\n";
-    f << "; _Ctrl _Shift _Alt: 1=wajib, 0=tidak\n\n";
+    WriteColor(L"UI", L"BgColor", m_ui.bgColor, iniPath);
+    WriteColor(L"UI", L"HeaderColor", m_ui.headerColor, iniPath);
+    WriteColor(L"UI", L"RowColor", m_ui.rowColor, iniPath);
+    WriteColor(L"UI", L"SelColor", m_ui.selColor, iniPath);
+    WriteColor(L"UI", L"EditColor", m_ui.editColor, iniPath);
+    WriteColor(L"UI", L"CatColor", m_ui.catColor, iniPath);
+    WriteColor(L"UI", L"TextColor", m_ui.textColor, iniPath);
+    WriteColor(L"UI", L"HighlightTextColor", m_ui.selTextColor, iniPath);
+    WriteColor(L"UI", L"EditTextColor", m_ui.editTextColor, iniPath);
+    WriteColor(L"UI", L"TitleColor", m_ui.titleColor, iniPath);
 
-    f << "; Buka/tutup menu (default: ALT+M)\n";
-    f << "ToggleMenu=" << m_toggleMenu.vkCode << "\n";
-    f << "ToggleMenu_Ctrl=" << (m_toggleMenu.ctrl ? 1 : 0) << "\n";
-    f << "ToggleMenu_Shift=" << (m_toggleMenu.shift ? 1 : 0) << "\n";
-    f << "ToggleMenu_Alt=" << (m_toggleMenu.alt ? 1 : 0) << "\n\n";
-
-    f << "; Buka Popup Save Preset (default: CTRL+SHIFT+S)\n";
-    f << "SaveConfig=" << m_saveConfig.vkCode << "\n";
-    f << "SaveConfig_Ctrl=" << (m_saveConfig.ctrl ? 1 : 0) << "\n";
-    f << "SaveConfig_Shift=" << (m_saveConfig.shift ? 1 : 0) << "\n";
-    f << "SaveConfig_Alt=" << (m_saveConfig.alt ? 1 : 0) << "\n\n";
-
-    f << "; Buka Popup Load Preset (default: CTRL+SHIFT+L)\n";
-    f << "LoadSnapshot=" << m_loadSnapshot.vkCode << "\n";
-    f << "LoadSnapshot_Ctrl=" << (m_loadSnapshot.ctrl ? 1 : 0) << "\n";
-    f << "LoadSnapshot_Shift=" << (m_loadSnapshot.shift ? 1 : 0) << "\n";
-    f << "LoadSnapshot_Alt=" << (m_loadSnapshot.alt ? 1 : 0) << "\n\n";
-
-    f << "; Reset semua threshold (default: CTRL+R, tekan 2x)\n";
-    f << "ResetAll=" << m_resetAll.vkCode << "\n";
-    f << "ResetAll_Ctrl=" << (m_resetAll.ctrl ? 1 : 0) << "\n";
-    f << "ResetAll_Shift=" << (m_resetAll.shift ? 1 : 0) << "\n";
-    f << "ResetAll_Alt=" << (m_resetAll.alt ? 1 : 0) << "\n\n";
-
-    f << "; Reload file ddraw.ini (default: CTRL+L)\n";
-    f << "ReloadConfig=" << m_reloadConfig.vkCode << "\n";
-    f << "ReloadConfig_Ctrl=" << (m_reloadConfig.ctrl ? 1 : 0) << "\n";
-    f << "ReloadConfig_Shift=" << (m_reloadConfig.shift ? 1 : 0) << "\n";
-    f << "ReloadConfig_Alt=" << (m_reloadConfig.alt ? 1 : 0) << "\n\n";
-
-    f << "; Buka menu Help (default: F1)\n";
-    f << "Help=" << m_help.vkCode << "\n";
-    f << "Help_Ctrl=" << (m_help.ctrl ? 1 : 0) << "\n";
-    f << "Help_Shift=" << (m_help.shift ? 1 : 0) << "\n";
-    f << "Help_Alt=" << (m_help.alt ? 1 : 0) << "\n\n";
-
-    f << "[Advanced]\n";
-    f << "TradeFrequencyMs=" << m_tradeFrequency << "\n\n";
-
-    f << "[UI]\n";
-    f << "MenuWidth=" << m_ui.menuWidth << "\n";
-    f << "RowHeight=" << m_ui.rowHeight << "\n";
-    f << "OffsetX=" << m_ui.offsetX << "\n";
-    f << "OffsetY=" << m_ui.offsetY << "\n";
-    f << "FontName=" << WtoA(m_ui.fontName) << "\n";
-    f << "FontSize=" << m_ui.fontSize << "\n";
-    f << "TitleSize=" << m_ui.titleSize << "\n\n";
-
-    f << "BgColor=" << (int)GetRValue(m_ui.bgColor) << "," << (int)GetGValue(m_ui.bgColor) << "," << (int)GetBValue(m_ui.bgColor) << "\n";
-    f << "HeaderColor=" << (int)GetRValue(m_ui.headerColor) << "," << (int)GetGValue(m_ui.headerColor) << "," << (int)GetBValue(m_ui.headerColor) << "\n";
-    f << "RowColor=" << (int)GetRValue(m_ui.rowColor) << "," << (int)GetGValue(m_ui.rowColor) << "," << (int)GetBValue(m_ui.rowColor) << "\n";
-    f << "SelColor=" << (int)GetRValue(m_ui.selColor) << "," << (int)GetGValue(m_ui.selColor) << "," << (int)GetBValue(m_ui.selColor) << "\n";
-    f << "EditColor=" << (int)GetRValue(m_ui.editColor) << "," << (int)GetGValue(m_ui.editColor) << "," << (int)GetBValue(m_ui.editColor) << "\n";
-    f << "CatColor=" << (int)GetRValue(m_ui.catColor) << "," << (int)GetGValue(m_ui.catColor) << "," << (int)GetBValue(m_ui.catColor) << "\n";
-    f << "TextColor=" << (int)GetRValue(m_ui.textColor) << "," << (int)GetGValue(m_ui.textColor) << "," << (int)GetBValue(m_ui.textColor) << "\n";
-    f << "HighlightTextColor=" << (int)GetRValue(m_ui.selTextColor) << "," << (int)GetGValue(m_ui.selTextColor) << "," << (int)GetBValue(m_ui.selTextColor) << "\n";
-    f << "EditTextColor=" << (int)GetRValue(m_ui.editTextColor) << "," << (int)GetGValue(m_ui.editTextColor) << "," << (int)GetBValue(m_ui.editTextColor) << "\n";
-    f << "TitleColor=" << (int)GetRValue(m_ui.titleColor) << "," << (int)GetGValue(m_ui.titleColor) << "," << (int)GetBValue(m_ui.titleColor) << "\n\n";
-
-    f << "[Defaults]\n";
-    f << "DefaultSale=" << m_defaultSale << "\n";
-    f << "DefaultBuy=" << m_defaultBuy << "\n";
-
-    f.close();
+    SaveItemThresholds(iniPath);
 }
 
-void ConfigManager::SaveSnapshot() { SaveActivePreset(); }
-void ConfigManager::LoadSnapshot() { LoadPresets(); }
+void ConfigManager::SaveSnapshot() {
+    if (!m_savePath.empty()) SaveItemThresholds(m_savePath);
+}
+void ConfigManager::LoadSnapshot() {
+    if (!m_savePath.empty()) LoadItemThresholds(m_savePath);
+}
 void ConfigManager::ResetAll() {
     for (auto& item : m_items) { item.saleThreshold = m_defaultSale; item.buyThreshold = m_defaultBuy; }
 }
 void ConfigManager::SetItemSale(int index, int value) { if (index >= 0 && index < (int)m_items.size()) m_items[index].saleThreshold = value; }
 void ConfigManager::SetItemBuy(int index, int value) { if (index >= 0 && index < (int)m_items.size()) m_items[index].buyThreshold = value; }
-
 bool ConfigManager::CheckHotkey(const HotkeyConfig& hk) {
     bool ctrlOk = (GetAsyncKeyState(VK_CONTROL) & 0x8000) ? hk.ctrl : !hk.ctrl;
     bool shiftOk = (GetAsyncKeyState(VK_SHIFT) & 0x8000) ? hk.shift : !hk.shift;
-    bool altOk = (GetAsyncKeyState(VK_MENU) & 0x8000) ? hk.alt : !hk.alt;
-    return (GetAsyncKeyState(hk.vkCode) & 0x8000) && ctrlOk && shiftOk && altOk;
-}
-
-std::wstring ConfigManager::HotkeyToString(const HotkeyConfig& hk) {
-    std::wstring s;
-    if (hk.ctrl) s += L"CTRL+";
-    if (hk.shift) s += L"SHIFT+";
-    if (hk.alt) s += L"ALT+";
-    
-    if (hk.vkCode >= 'A' && hk.vkCode <= 'Z') {
-        s += (wchar_t)hk.vkCode;
-    } else if (hk.vkCode >= '0' && hk.vkCode <= '9') {
-        s += (wchar_t)hk.vkCode;
-    } else if (hk.vkCode >= VK_F1 && hk.vkCode <= VK_F12) {
-        s += L"F" + std::to_wstring(hk.vkCode - VK_F1 + 1);
-    } else {
-        switch(hk.vkCode) {
-            case VK_ESCAPE: s += L"ESC"; break;
-            case VK_RETURN: s += L"ENTER"; break;
-            case VK_SPACE:  s += L"SPACE"; break;
-            case VK_TAB:    s += L"TAB"; break;
-            default: s += L"VK(" + std::to_wstring(hk.vkCode) + L")"; break;
-        }
-    }
-    return s;
+    return (GetAsyncKeyState(hk.vkCode) & 0x8000) && ctrlOk && shiftOk;
 }
